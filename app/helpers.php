@@ -14,6 +14,13 @@ function app_url(string $path = ''): string
         ? substr($script, 0, $adminPosition)
         : rtrim(str_replace('\\', '/', dirname($script)), '/');
     $base = $base === '/' ? '' : rtrim($base, '/');
+    if ($base === '') {
+        $requestPath = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH);
+        if (is_string($requestPath)
+            && preg_match('#^(.*?)/(?:post|category)/[^/]+/?$#', $requestPath, $matches) === 1) {
+            $base = $matches[1];
+        }
+    }
 
     return $base . ($path === '' ? '' : '/' . ltrim($path, '/'));
 }
@@ -35,6 +42,53 @@ function excerpt(string $text, int $length = 180): string
         return $matches[0] . '…';
     }
     return $text;
+}
+
+function render_paragraphs(string $text): string
+{
+    $text = trim(str_replace(["\r\n", "\r"], "\n", $text));
+    if ($text === '') {
+        return '';
+    }
+
+    $paragraphs = preg_split('/\n{2,}/', e($text)) ?: [];
+    $html = '';
+    foreach ($paragraphs as $paragraph) {
+        if (trim($paragraph) !== '') {
+            $html .= '<p>' . nl2br($paragraph, false) . '</p>';
+        }
+    }
+    return $html;
+}
+
+function reading_time(string $text): int
+{
+    $wordCount = preg_match_all('/[\p{L}\p{N}]+/u', strip_tags($text));
+    if ($wordCount === false) {
+        $wordCount = str_word_count(strip_tags($text));
+    }
+    return max(1, (int) ceil($wordCount / 220));
+}
+
+function render_post_card(array $post): string
+{
+    $url = app_url('post/' . rawurlencode((string) $post['slug']));
+    $categoryUrl = app_url('category/' . rawurlencode((string) $post['category_slug']));
+    $title = e((string) $post['title']);
+    $cover = '';
+    if (!empty($post['cover_image'])) {
+        $cover = '<a class="post-card__image-link" href="' . e($url) . '"><img class="post-card__image" src="'
+            . e(app_url('uploads/' . rawurlencode((string) $post['cover_image']))) . '" alt="Cover image for '
+            . $title . '" loading="lazy"></a>';
+    }
+
+    return '<article class="post-card">' . $cover . '<div class="post-card__content">'
+        . '<a class="eyebrow post-card__category" href="' . e($categoryUrl) . '">' . e((string) $post['category_name']) . '</a>'
+        . '<h2 class="post-card__title"><a href="' . e($url) . '">' . $title . '</a></h2>'
+        . '<p class="post-card__excerpt">' . e((string) $post['excerpt']) . '</p>'
+        . '<div class="post-card__footer"><span>By ' . e((string) $post['author_name']) . '</span><time datetime="'
+        . e(date('c', strtotime((string) $post['published_at']))) . '">' . e(date('M j, Y', strtotime((string) $post['published_at'])))
+        . '</time></div></div></article>';
 }
 
 function text_length(string $value): int

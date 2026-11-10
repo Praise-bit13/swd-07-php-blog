@@ -18,6 +18,10 @@ PHP 8 and MySQL blog CMS for `http://localhost/swd/07-php-blog/`.
 
 Cover images accept JPEG, PNG, or WebP up to 2 MB. Published post search uses the posts table's FULLTEXT index. HTTPS should be enabled in production so session cookies are marked secure.
 
+## Public journal
+
+The public homepage and category pages show six newest published stories per page. Published stories are available at `/post/{slug}` and categories at `/category/{slug}`. Article bodies are HTML-escaped before paragraph and line-break formatting, so stored content is displayed as text rather than executable markup. Article pages show an estimated reading time and up to three related stories from the same category. Search uses the posts FULLTEXT index, with a literal `LIKE` match for queries shorter than three characters.
+
 ## Admin CRUD and image-upload protections
 
 The admin can create, edit, filter, and delete posts and categories. Category counts include categories with no posts. Post slugs are generated from titles and get a numeric suffix when a slug is already in use. Publishing a post fills in `published_at` only when it is still empty. Replacing a cover or deleting its post removes the old uploaded image.

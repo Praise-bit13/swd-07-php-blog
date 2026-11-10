@@ -2,25 +2,67 @@
 declare(strict_types=1);
 require_once __DIR__ . '/app/bootstrap.php';
 
+$perPage = 6;
 $page = max(1, (int) ($_GET['page'] ?? 1));
-$perPage = 9;
 $total = (int) db()->query("SELECT COUNT(*) FROM posts WHERE status = 'published'")->fetchColumn();
+$totalPages = max(1, (int) ceil($total / $perPage));
+$page = min($page, $totalPages);
+
 $statement = db()->prepare(
-    "SELECT p.id, p.title, p.slug, p.excerpt, p.cover_image, p.published_at, c.name AS category_name, c.slug AS category_slug, a.name AS author_name
-     FROM posts p JOIN categories c ON c.id = p.category_id JOIN admins a ON a.id = p.author_id
-     WHERE p.status = 'published' ORDER BY p.published_at DESC, p.id DESC LIMIT :limit OFFSET :offset"
+    "SELECT p.id, p.title, p.slug, p.excerpt, p.cover_image, p.published_at,
+            c.name AS category_name, c.slug AS category_slug, a.name AS author_name
+     FROM posts p
+     JOIN categories c ON c.id = p.category_id
+     JOIN admins a ON a.id = p.author_id
+     WHERE p.status = 'published'
+     ORDER BY p.published_at DESC, p.id DESC
+     LIMIT :limit OFFSET :offset"
 );
 $statement->bindValue('limit', $perPage, PDO::PARAM_INT);
 $statement->bindValue('offset', ($page - 1) * $perPage, PDO::PARAM_INT);
 $statement->execute();
 $posts = $statement->fetchAll();
+
+$pageTitle = 'SWD Journal — stories, ideas & inspiration';
+$pageDescription = 'Fresh perspectives, practical guides, and thoughtful stories from the SWD community.';
+require __DIR__ . '/app/public-header.php';
 ?>
-<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Blog</title><link rel="stylesheet" href="<?= e(app_url('assets/style.css')) ?>"></head>
-<body><header class="site-header"><a class="brand" href="<?= e(app_url()) ?>">SWD Blog</a><nav class="site-nav"><a href="<?= e(app_url('search.php')) ?>">Search</a><a href="<?= e(app_url('admin/login.php')) ?>">Admin</a></nav></header>
-<main class="container"><section class="hero"><h1>Stories and ideas</h1><p>Latest articles from our team.</p><form class="search-box" action="<?= e(app_url('search.php')) ?>" method="get"><input name="q" placeholder="Search articles" aria-label="Search articles"><button>Search</button></form></section>
-<?php if (!$posts): ?><p>No published posts yet.</p><?php else: ?><div class="grid">
-<?php foreach ($posts as $post): ?><article class="card"><?php if ($post['cover_image']): ?><a href="<?= e(app_url('post.php?slug=' . rawurlencode($post['slug']))) ?>"><img src="<?= e(app_url('uploads/' . rawurlencode($post['cover_image']))) ?>" alt=""></a><?php endif; ?><p class="meta"><a href="<?= e(app_url('category.php?slug=' . rawurlencode($post['category_slug']))) ?>"><?= e($post['category_name']) ?></a> · <?= e(date('M j, Y', strtotime($post['published_at']))) ?></p><h2><a href="<?= e(app_url('post.php?slug=' . rawurlencode($post['slug']))) ?>"><?= e($post['title']) ?></a></h2><p><?= e($post['excerpt']) ?></p><p class="meta">By <?= e($post['author_name']) ?></p><a href="<?= e(app_url('post.php?slug=' . rawurlencode($post['slug']))) ?>">Read article →</a></article><?php endforeach; ?>
-</div><?php endif; ?>
-<?php if ($total > $perPage): ?><nav class="pagination"><?php if ($page > 1): ?><a class="button secondary" href="?page=<?= $page - 1 ?>">Previous</a><?php endif; ?><?php if ($page * $perPage < $total): ?><a class="button" href="?page=<?= $page + 1 ?>">Next</a><?php endif; ?></nav><?php endif; ?>
-</main><footer>SWD Blog</footer></body></html>
+<section class="home-hero">
+    <div class="home-hero__inner">
+        <p class="eyebrow">THE SWD JOURNAL</p>
+        <h1>Ideas that move<br><span>you forward.</span></h1>
+        <p class="home-hero__intro">Fresh perspectives, practical guides, and thoughtful stories for curious minds.</p>
+        <form class="search-form search-form--hero" action="<?= e(app_url('search.php')) ?>" method="get" role="search">
+            <label class="sr-only" for="home-search">Search stories</label>
+            <span class="search-form__icon" aria-hidden="true">⌕</span>
+            <input id="home-search" type="search" name="q" placeholder="What are you curious about?">
+            <button type="submit">Explore stories <span aria-hidden="true">→</span></button>
+        </form>
+        <div class="home-hero__note"><span class="hero-dot"></span> A little inspiration for your next big idea</div>
+    </div>
+    <div class="home-hero__art" aria-hidden="true"><div class="hero-orbit hero-orbit--one"></div><div class="hero-orbit hero-orbit--two"></div><div class="hero-art__spark">✳</div><div class="hero-art__label">READ<br>WIDELY</div></div>
+</section>
+
+<section class="content-section">
+    <div class="section-heading">
+        <div><p class="eyebrow">THE LATEST</p><h2>Stories to explore</h2></div>
+        <span class="section-heading__count"><?= number_format($total) ?> <?= $total === 1 ? 'story' : 'stories' ?></span>
+    </div>
+    <?php if (!$posts): ?>
+        <div class="empty-state"><span class="empty-state__icon" aria-hidden="true">✳</span><h2>The next story starts here.</h2><p>There are no published posts yet. Check back soon for something worth reading.</p></div>
+    <?php else: ?>
+        <div class="post-grid">
+            <?php foreach ($posts as $post): ?>
+                <?= render_post_card($post) ?>
+            <?php endforeach; ?>
+        </div>
+        <?php if ($totalPages > 1): ?>
+            <nav class="pagination" aria-label="Story pages">
+                <?php if ($page > 1): ?><a class="pagination__link" href="<?= e(app_url('?page=' . ($page - 1))) ?>">← <span>Newer stories</span></a><?php else: ?><span></span><?php endif; ?>
+                <span class="pagination__current">Page <?= $page ?> <span>of <?= $totalPages ?></span></span>
+                <?php if ($page < $totalPages): ?><a class="pagination__link pagination__link--next" href="<?= e(app_url('?page=' . ($page + 1))) ?>"><span>Older stories</span> →</a><?php else: ?><span></span><?php endif; ?>
+            </nav>
+        <?php endif; ?>
+    <?php endif; ?>
+</section>
+<?php require __DIR__ . '/app/public-footer.php'; ?>
