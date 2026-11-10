@@ -16,4 +16,18 @@ PHP 8 and MySQL blog CMS for `http://localhost/swd/07-php-blog/`.
    Enter a password of at least 12 characters and confirm it. Input is visible in the Windows terminal. The command refuses to create another admin once one exists.
 5. Sign in at `/admin/login.php`, create a category, and then create posts. Posts are drafts until published.
 
-Cover images accept JPG, PNG, GIF, or WebP up to 5 MB. Published post search uses the posts table's FULLTEXT index. HTTPS should be enabled in production so session cookies are marked secure.
+Cover images accept JPEG, PNG, or WebP up to 2 MB. Published post search uses the posts table's FULLTEXT index. HTTPS should be enabled in production so session cookies are marked secure.
+
+## Admin CRUD and image-upload protections
+
+The admin can create, edit, filter, and delete posts and categories. Category counts include categories with no posts. Post slugs are generated from titles and get a numeric suffix when a slug is already in use. Publishing a post fills in `published_at` only when it is still empty. Replacing a cover or deleting its post removes the old uploaded image.
+
+Upload checks and the risks they reduce:
+
+- The server checks the uploaded size against 2 MiB to limit storage exhaustion and oversized-upload abuse.
+- `is_uploaded_file()` accepts only files PHP received through an HTTP upload, not an arbitrary local path supplied to the upload helper.
+- `finfo` inspects the file contents for its real MIME type rather than trusting the browser-supplied filename or `Content-Type`, reducing disguised-file and executable-upload risks.
+- Only JPEG, PNG, and WebP are accepted. SVG and other active or unexpected formats are rejected.
+- The stored name is generated with `bin2hex(random_bytes(16))` and a MIME-derived extension, preventing attacker-controlled path traversal filenames and reducing collisions.
+- Image deletion accepts only generated image filenames, preventing a stored filename from escaping the uploads directory.
+- `uploads/.htaccess` disables directory listings and denies PHP-like files as defense in depth if an upload is ever misidentified.

@@ -8,7 +8,7 @@ $isEdit = (int) $category['id'] > 0;
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verify_csrf();
     $category['name'] = posted_string('name');
-    if ($category['name'] === '' || strlen($category['name']) > 120) $errors[] = 'Name is required and must be 120 characters or fewer.';
+    if ($category['name'] === '' || text_length($category['name']) > 120) $errors[] = 'Name is required and must be 120 characters or fewer.';
     if (!$errors) {
         $slug = unique_slug(db(), 'categories', $category['name'], $isEdit ? (int) $category['id'] : null);
         if ($isEdit) {

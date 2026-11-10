@@ -37,11 +37,21 @@ function excerpt(string $text, int $length = 180): string
     return $text;
 }
 
-function make_slug(string $value): string
+function text_length(string $value): int
 {
-    $value = strtolower(trim($value));
-    $value = preg_replace('/[^a-z0-9]+/', '-', $value) ?? '';
-    return trim($value, '-');
+    if (function_exists('mb_strlen')) {
+        return mb_strlen($value, 'UTF-8');
+    }
+
+    $length = preg_match_all('/./us', $value);
+    return $length === false ? PHP_INT_MAX : $length;
+}
+
+function slugify(string $title): string
+{
+    $title = strtolower(trim($title));
+    $title = preg_replace('/[^a-z0-9]+/', '-', $title) ?? '';
+    return trim($title, '-');
 }
 
 function unique_slug(PDO $pdo, string $table, string $value, ?int $exceptId = null): string
@@ -49,7 +59,7 @@ function unique_slug(PDO $pdo, string $table, string $value, ?int $exceptId = nu
     if (!in_array($table, ['posts', 'categories'], true)) {
         throw new InvalidArgumentException('Unsupported slug table.');
     }
-    $base = make_slug($value);
+    $base = slugify($value);
     if ($base === '') {
         $base = 'entry';
     }
@@ -84,22 +94,24 @@ function upload_cover(array $file, ?string $current = null): ?string
     if (($file['error'] ?? UPLOAD_ERR_OK) !== UPLOAD_ERR_OK) {
         throw new RuntimeException('The cover image could not be uploaded.');
     }
-    if (($file['size'] ?? 0) > 5 * 1024 * 1024) {
-        throw new RuntimeException('Cover images must be no larger than 5 MB.');
+    $temporaryFile = $file['tmp_name'] ?? '';
+    if (!is_string($temporaryFile) || !is_uploaded_file($temporaryFile)) {
+        throw new RuntimeException('Choose a valid uploaded image.');
     }
-    $imageInfo = @getimagesize($file['tmp_name']);
-    if ($imageInfo === false) {
-        throw new RuntimeException('Choose a valid image file.');
+    $size = filesize($temporaryFile);
+    if ($size === false || $size > 2 * 1024 * 1024) {
+        throw new RuntimeException('Cover images must be no larger than 2 MB.');
     }
-    $mime = $imageInfo['mime'] ?? '';
+
+    $finfo = new finfo(FILEINFO_MIME_TYPE);
+    $mime = $finfo->file($temporaryFile);
     $extensions = [
         'image/jpeg' => 'jpg',
         'image/png' => 'png',
-        'image/gif' => 'gif',
         'image/webp' => 'webp',
     ];
-    if (!isset($extensions[$mime])) {
-        throw new RuntimeException('Use a JPG, PNG, GIF, or WebP image.');
+    if (!is_string($mime) || !isset($extensions[$mime])) {
+        throw new RuntimeException('Use a JPG, PNG, or WebP image.');
     }
 
     $directory = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'uploads';
@@ -107,8 +119,23 @@ function upload_cover(array $file, ?string $current = null): ?string
         throw new RuntimeException('The uploads directory could not be created.');
     }
     $filename = bin2hex(random_bytes(16)) . '.' . $extensions[$mime];
-    if (!move_uploaded_file($file['tmp_name'], $directory . DIRECTORY_SEPARATOR . $filename)) {
+    if (!move_uploaded_file($temporaryFile, $directory . DIRECTORY_SEPARATOR . $filename)) {
         throw new RuntimeException('The cover image could not be saved.');
     }
     return $filename;
+}
+
+function delete_cover_image(?string $filename): void
+{
+    if ($filename === null || $filename === '') {
+        return;
+    }
+    if (preg_match('/\A[a-f0-9]{32}\.(?:jpg|png|gif|webp)\z/', $filename) !== 1) {
+        throw new RuntimeException('The stored cover image filename is invalid.');
+    }
+
+    $path = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . $filename;
+    if (is_file($path) && !unlink($path)) {
+        throw new RuntimeException('The old cover image could not be deleted.');
+    }
 }
