@@ -1,0 +1,16 @@
+.env
+.env.*
+!.env.example
+
+/uploads/*
+!/uploads/.htaccess
+
+*.log
+*.bak
+*.dump
+*.sql.gz
+*.sql.zip
+*-backup*.sql
+*_backup*.sql
+
+.idea/
